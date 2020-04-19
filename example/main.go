@@ -13,21 +13,22 @@ type TestStruct struct {
 	Message string `json:"message"`
 }
 
-func getHandler(c enlight.Context) error {
-	fmt.Println("getHandler")
-	return c.String(200, "Hello World")
-}
-
 func getAutoHandler(c enlight.Context) error {
 	m := TestStruct{"Hello from AutoHandler"}
 	fmt.Println("getAutoHandler")
 	return c.JSON(200, m)
 }
 
+func showHTML(c enlight.Context) error {
+	return c.HTML(200, "<h1>Hello World</h1>")
+}
+
 func serve(ctx context.Context) (err error) {
 	e := enlight.New()
-	e.GET("/", getHandler)
+	e.GET("/", showHTML)
 	e.GET("/auto", getAutoHandler)
+
+	e.Static("/public", "")
 
 	go func() {
 		if err := e.Start(":8085"); err != nil {

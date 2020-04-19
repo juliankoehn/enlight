@@ -13,6 +13,8 @@ type Router struct {
 	paramsPool sync.Pool
 	maxParams  uint16
 
+	RedirectTrailingSlash bool
+
 	// If enabled, adds the matched route path onto the http.Request context
 	// before invoking the handler.
 	// The matched route path is only added to handlers of routes that where
@@ -53,6 +55,17 @@ type Param struct {
 // It is therefore safe to read values by the index.
 type Params []Param
 
+// ByName returns the value of the first Param which key matches the given name.
+// If no matching Param is found, an empty string is returned.
+func (ps Params) ByName(name string) string {
+	for i := range ps {
+		if ps[i].Key == name {
+			return ps[i].Value
+		}
+	}
+	return ""
+}
+
 // HandleFunc is a function that can be registered to a route to handle HTTP
 // requests. Like http.HandlerFunc.
 type HandleFunc func(Context) error
@@ -62,6 +75,7 @@ type HandleFunc func(Context) error
 func NewRouter() *Router {
 	return &Router{
 		HandleMethodNotAllowed: true,
+		RedirectTrailingSlash:  true,
 	}
 }
 
@@ -138,7 +152,7 @@ func (r *Router) allowed(path, reqMethod string) (allow string) {
 				continue
 			}
 
-			handle, _ := r.trees[method].getValue(path)
+			handle, _, _ := r.trees[method].getValue(path)
 			if handle != nil {
 				// Add request method to list of allowed methods
 				allowed = append(allowed, method)
@@ -171,13 +185,46 @@ func (r *Router) saveMatchedRoutePath(path string, handle HandleFunc) HandleFunc
 }
 
 // Find lookup a handler registered for method and path.
-func (r *Router) Find(method, path string, c Context) {
+func (r *Router) Find(c Context) {
 	ctx := c.(*context)
+
+	method := string(ctx.RequestCtx.Method())
+	path := string(ctx.RequestCtx.Path())
+
 	ctx.path = path
 
 	if root := r.trees[method]; root != nil {
-		if handle, _ := root.getValue(path); handle != nil {
+		if handle, param, tsr := root.getValue(path); handle != nil {
+			if param != nil {
+				ctx.params = param
+			}
 			ctx.handler = handle
+			return
+		} else if method != "CONNECT" && path != "/" {
+			if param != nil {
+				ctx.params = param
+			}
+			code := 301
+			if method != "GET" {
+				// Temporary redirect, request with same method
+				// As of Go 1.3, Go does not support status code 308
+				code = 307
+			}
+
+			if tsr && r.RedirectTrailingSlash {
+				var uri string
+
+				if len(path) > 1 && path[len(path)-1] == '/' {
+					if len(path) > 1 && path[len(path)-1] == '/' {
+						uri = path[:len(path)-1]
+					} else {
+						uri = path + "/"
+					}
+				}
+
+				ctx.Redirect(code, uri)
+				return
+			}
 		}
 	}
 }

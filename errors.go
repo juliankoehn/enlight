@@ -1,6 +1,7 @@
 package enlight
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -9,7 +10,8 @@ import (
 
 // Errors
 var (
-	ErrNotFound = NewHTTPError(http.StatusNotFound)
+	ErrNotFound            = NewHTTPError(http.StatusNotFound)
+	ErrInvalidRedirectCode = errors.New("invalid redirect status code")
 )
 
 // HTTPError represents an error that occured while handling a request.

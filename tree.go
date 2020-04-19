@@ -1,6 +1,8 @@
 package enlight
 
-import "strings"
+import (
+	"strings"
+)
 
 // tree.go is based upon https://github.com/julienschmidt/httprouter/blob/master/tree.go
 // nearly all code comes from there.
@@ -19,6 +21,7 @@ type node struct {
 	path      string
 	children  []*node
 	handle    HandleFunc
+	maxParams uint16
 	indices   string
 	wildChild bool
 	nType     nodeType
@@ -106,6 +109,7 @@ func (n *node) incrementChildPrio(pos int) int {
 func (n *node) addRoute(path string, handle HandleFunc) {
 	fullPath := path
 	n.priority++
+	numParams := countParams(path)
 
 	// Empty tree
 	if len(n.path) == 0 && len(n.indices) == 0 {
@@ -115,6 +119,11 @@ func (n *node) addRoute(path string, handle HandleFunc) {
 	}
 walk:
 	for {
+		// Update maxParams of the current node
+		if numParams > n.maxParams {
+			n.maxParams = numParams
+		}
+
 		// Find the longest common prefix.
 		// This also implies that the common prefix contains no ':' or '*'
 		// since the existing key can't contain those chars.
@@ -132,6 +141,13 @@ walk:
 				priority:  n.priority - 1,
 			}
 
+			// Update maxParams (max of all children)
+			for i := range child.children {
+				if child.children[i].maxParams > child.maxParams {
+					child.maxParams = child.children[i].maxParams
+				}
+			}
+
 			n.children = []*node{&child}
 			// []byte for proper unicode char conversion, see #65
 			n.indices = string([]byte{n.path[i]})
@@ -147,6 +163,12 @@ walk:
 			if n.wildChild {
 				n = n.children[0]
 				n.priority++
+
+				// Update maxParams of the child node
+				if numParams > n.maxParams {
+					n.maxParams = numParams
+				}
+				numParams--
 
 				// Check if the wildcard matches
 				if len(path) >= len(n.path) && n.path == path[:len(n.path)] &&
@@ -192,7 +214,9 @@ walk:
 			if idxc != ':' && idxc != '*' {
 				// []byte for proper unicode char conversion, see #65
 				n.indices += string([]byte{idxc})
-				child := &node{}
+				child := &node{
+					maxParams: numParams,
+				}
 				n.children = append(n.children, child)
 				n.incrementChildPrio(len(n.indices) - 1)
 				n = child
@@ -318,7 +342,7 @@ func (n *node) insertChild(path, fullPath string, handle HandleFunc) {
 // If no handle can be found, a TSR (trailing slash redirect) recommendation is
 // made if a handle exists with an extra (without the) trailing slash for the
 // given path.
-func (n *node) getValue(path string) (handle HandleFunc, tsr bool) {
+func (n *node) getValue(path string) (handle HandleFunc, p Params, tsr bool) {
 walk: // Outer loop for walking the tree
 	for {
 		prefix := n.path
@@ -379,6 +403,15 @@ walk: // Outer loop for walking the tree
 
 					return
 				case catchAll:
+					if p == nil {
+						// lazy allocation
+						p = make(Params, 0, n.maxParams)
+					}
+					p = append(p, Param{
+						Key:   n.path[2:],
+						Value: path,
+					})
+
 					handle = n.handle
 					return
 				default:

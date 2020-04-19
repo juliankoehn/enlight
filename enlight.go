@@ -2,8 +2,11 @@ package enlight
 
 import (
 	"fmt"
+	"io"
 	"net"
-	"net/http"
+	"net/url"
+	"path"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -14,6 +17,7 @@ import (
 // used to dispatch requests to different handler
 // functions via configurable routes
 type Enlight struct {
+	common
 	Debug            bool
 	Router           *Router
 	Server           *fasthttp.Server
@@ -24,6 +28,15 @@ type Enlight struct {
 	middleware       []MiddlewareFunc
 	HTTPErrorHandler HTTPErrorHandler
 	pool             sync.Pool
+	Renderer         Renderer
+}
+
+// Common struct for Echo & Group.
+type common struct{}
+
+// Renderer is the interface that wraps the Render function.
+type Renderer interface {
+	Render(io.Writer, string, interface{}, Context) error
 }
 
 // Map defines a generic map of type `map[string]interface{}`.
@@ -48,6 +61,7 @@ func New() (e *Enlight) {
 // NewContext returns a Context instance.
 func (e *Enlight) NewContext() Context {
 	return &context{
+		enlight: e,
 		handler: NotFoundHandler,
 	}
 }
@@ -62,9 +76,104 @@ func (e *Enlight) Use(middleware ...MiddlewareFunc) {
 	e.middleware = append(e.middleware, middleware...)
 }
 
+// CONNECT registers a new CONNECT route for a path with matching handler
+func (e *Enlight) CONNECT(path string, h HandleFunc) {
+	e.Router.Handle(fasthttp.MethodConnect, path, h)
+}
+
+// DELETE registers a new DELETE route for a path with matching handler
+func (e *Enlight) DELETE(path string, handle HandleFunc) {
+	e.Router.Handle(fasthttp.MethodDelete, path, handle)
+}
+
 // GET registers a new GET route for a path withh matching handler
 func (e *Enlight) GET(path string, handle HandleFunc) {
-	e.Router.Handle(http.MethodGet, path, handle)
+	e.Router.Handle(fasthttp.MethodGet, path, handle)
+}
+
+// HEAD registers a new HEAD route for a path withh matching handler
+func (e *Enlight) HEAD(path string, handle HandleFunc) {
+	e.Router.Handle(fasthttp.MethodHead, path, handle)
+}
+
+// OPTIONS registers a new OPTIONS route for a path withh matching handler
+func (e *Enlight) OPTIONS(path string, handle HandleFunc) {
+	e.Router.Handle(fasthttp.MethodOptions, path, handle)
+}
+
+// PATCH registers a new PATCH route for a path with matching handler
+func (e *Enlight) PATCH(path string, handle HandleFunc) {
+	e.Router.Handle(fasthttp.MethodPatch, path, handle)
+}
+
+// POST registers a new POST route for a path with matching handler
+func (e *Enlight) POST(path string, handle HandleFunc) {
+	e.Router.Handle(fasthttp.MethodPost, path, handle)
+}
+
+// PUT registers a new PUT route for a path with matching handler
+func (e *Enlight) PUT(path string, handle HandleFunc) {
+	e.Router.Handle(fasthttp.MethodPut, path, handle)
+}
+
+// TRACE registers a new TRACE route for a path with matching handler
+func (e *Enlight) TRACE(path string, handle HandleFunc) {
+	e.Router.Handle(fasthttp.MethodTrace, path, handle)
+}
+
+var (
+	methods = [...]string{
+		fasthttp.MethodConnect,
+		fasthttp.MethodDelete,
+		fasthttp.MethodGet,
+		fasthttp.MethodHead,
+		fasthttp.MethodOptions,
+		fasthttp.MethodPatch,
+		fasthttp.MethodPost,
+		PROPFIND,
+		fasthttp.MethodPut,
+		fasthttp.MethodTrace,
+		REPORT,
+	}
+)
+
+// Any registers a new route for all HTTP methods and path with matching handler
+func (e *Enlight) Any(path string, handle HandleFunc) {
+	for _, m := range methods {
+		e.Router.Handle(m, path, handle)
+	}
+}
+
+func (e *Enlight) Match(methods []string, path string, handle HandleFunc) {
+	for _, m := range methods {
+		e.Router.Handle(m, path, handle)
+	}
+}
+
+// Static serves static files
+func (e *Enlight) Static(prefix, root string) {
+	if root == "" {
+		root = "."
+	}
+	e.static(prefix, root, e.GET)
+}
+
+func (common) static(prefix, root string, get func(string, HandleFunc)) {
+	h := func(c Context) error {
+
+		p, err := url.PathUnescape(c.Param("filepath"))
+		if err != nil {
+			return err
+		}
+		name := filepath.Join(root, path.Clean("/"+p)) // "/"+ for security
+		return c.File(name)
+	}
+	if prefix == "/" {
+		get(prefix+"*filepath", h)
+		return
+	}
+	get(prefix+"/*filepath", h)
+	return
 }
 
 // ServeHTTP implements `http.Handler` interface, which serves HTTP requests.
@@ -77,13 +186,10 @@ func (e *Enlight) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	// the pre middleware allows us to cast dynamic routes to our router
 	// we must register them and deregister them afterwards
 
-	path := string(ctx.Path())
-	method := string(ctx.Method())
-
 	h := NotFoundHandler
 
 	if e.premiddleware == nil {
-		e.Router.Find(method, path, c)
+		e.Router.Find(c)
 		h = c.handler
 		h = applyMiddleware(h, e.middleware...)
 	} else {
@@ -116,6 +222,17 @@ func (e *Enlight) StartServer(address string) (err error) {
 	fmt.Printf("⇨ http server started on %s\n", e.Listener.Addr())
 	return fasthttp.Serve(e.Listener, e.ServeHTTP)
 	//return s.Serve(e.Listener)
+}
+
+// Close immediately stops the listeners.
+func (e *Enlight) Close() error {
+	if e.TLSListener != nil {
+		if err := e.TLSListener.Close(); err != nil {
+			return err
+		}
+	}
+
+	return e.Listener.Close()
 }
 
 // Shutdown stops the server gracefully.
