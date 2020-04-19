@@ -118,6 +118,12 @@ func (e *Enlight) StartServer(address string) (err error) {
 	//return s.Serve(e.Listener)
 }
 
+// Shutdown stops the server gracefully.
+func (e *Enlight) Shutdown() error {
+	fmt.Print("⇨ Server is shutting down...")
+	return e.Server.Shutdown()
+}
+
 // tcpKeepAliveListener sets TCP keep-alive timeouts on accepted
 // connections. It's used by ListenAndServe and ListenAndServeTLS so
 // dead TCP connections (e.g. closing laptop mid-download) eventually

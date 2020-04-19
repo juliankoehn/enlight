@@ -7,5 +7,6 @@ require (
 	github.com/francoispqt/gojay v1.2.13
 	github.com/klauspost/compress v1.10.4 // indirect
 	github.com/klauspost/cpuid v1.2.3 // indirect
+	github.com/labstack/gommon v0.3.0
 	github.com/valyala/fasthttp v1.11.0
 )
