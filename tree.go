@@ -474,6 +474,15 @@ walk: // Outer loop for walking the tree
 					for end < len(path) && path[end] != '/' {
 						end++
 					}
+					// Save param value
+					if p == nil {
+						// lazy allocation
+						p = make(Params, 0, n.maxParams)
+					}
+					p = append(p, Param{
+						Key:   n.path[1:],
+						Value: path[:end],
+					})
 					// We need to go deeper!
 					if end < len(path) {
 						if len(n.children) > 0 {

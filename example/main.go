@@ -105,6 +105,12 @@ func showHTML(c enlight.Context) error {
 	return c.HTML(200, "<h1>Hello World</h1>")
 }
 
+func userHandler(c enlight.Context) error {
+	hello := string(c.QueryParams().Peek("name"))
+	name := c.Param("name")
+	return c.HTML(200, fmt.Sprintf("<h1>Hello %s & %s</h1>", name, hello))
+}
+
 func serve() (err error) {
 	app := &App{}
 	e := enlight.New()
@@ -123,6 +129,8 @@ func serve() (err error) {
 	e.GET("/stats", s.Handle)
 
 	e.GET("/panic", PanicRoute)
+
+	e.GET("/user/:name", userHandler)
 
 	// Server header
 	e.Use(ServerHeader)

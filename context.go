@@ -3,7 +3,6 @@ package enlight
 import (
 	"encoding/json"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/valyala/fasthttp"
@@ -19,8 +18,8 @@ type (
 		// Param returns path parameter by name.
 		Param(name string) string
 
-		// QueryParams returns the query parameters as `url.Values`.
-		QueryParams() url.Values
+		// QueryParams returns the query parameters as `*fasthttp.Args`.
+		QueryParams() *fasthttp.Args
 
 		// HTML sends an HTTP response with status code.
 		HTML(code int, html string) error
@@ -68,7 +67,7 @@ type (
 		params     Params
 		pnames     []string
 		pvalues    []string
-		query      url.Values
+		query      *fasthttp.Args
 		handler    HandleFunc
 		enlight    *Enlight
 	}
@@ -114,9 +113,9 @@ func (c *context) ParamNames() []string {
 	return c.pnames
 }
 
-func (c *context) QueryParams() url.Values {
+func (c *context) QueryParams() *fasthttp.Args {
 	if c.query == nil {
-		c.query = c.request.URL.Query()
+		c.query = c.RequestCtx.QueryArgs()
 	}
 	return c.query
 }
