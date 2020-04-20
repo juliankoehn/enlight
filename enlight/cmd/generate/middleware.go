@@ -1,10 +1,9 @@
 package generate
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
 
-var (
-	resourceOptions = struct {
-	}
+	"github.com/spf13/cobra"
 )
 
 const middlewareExample = `$ enlight g middleware auth`
@@ -17,7 +16,7 @@ var MiddlewareCmd = &cobra.Command{
 	Short:   "Generate a new middleware/middleware file",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
-			return fmt.Errof("you must supply a name")
+			return fmt.Errorf("you must supply a name")
 		}
 		return nil
 	},

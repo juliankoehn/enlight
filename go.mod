@@ -3,6 +3,7 @@ module github.com/juliankoehn/enlight
 go 1.13
 
 require (
+	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gobuffalo/buffalo v0.16.5 // indirect
 	github.com/gobuffalo/clara v0.10.1
 	github.com/json-iterator/go v1.1.9
