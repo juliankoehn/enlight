@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/juliankoehn/enlight"
+	"github.com/juliankoehn/enlight/middleware"
 	"github.com/valyala/fasthttp"
 )
 
@@ -50,6 +51,10 @@ func (a *App) CleanupDynamicRoutes(next enlight.HandleFunc) enlight.HandleFunc {
 
 func DynamicRoute(c enlight.Context) error {
 	return c.String(200, "Hello from dynamic Route")
+}
+
+func PanicRoute(c enlight.Context) error {
+	panic("Panic!")
 }
 
 // ServerHeader middleware adds a `Server` header to the response.
@@ -105,6 +110,8 @@ func serve() (err error) {
 	e := enlight.New()
 	app.Enlight = e
 
+	e.Use(middleware.Recover())
+
 	e.GET("/", showHTML)
 	e.GET("/auto", getAutoHandler, RouteBasedMiddleware)
 
@@ -114,6 +121,8 @@ func serve() (err error) {
 	s := NewStats()
 	e.Use(s.ProcessStats)
 	e.GET("/stats", s.Handle)
+
+	e.GET("/panic", PanicRoute)
 
 	// Server header
 	e.Use(ServerHeader)
