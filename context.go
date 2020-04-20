@@ -1,9 +1,10 @@
 package enlight
 
 import (
-	"encoding/json"
-	"net/http"
+	"mime/multipart"
 	"strings"
+
+	json "github.com/json-iterator/go"
 
 	"github.com/valyala/fasthttp"
 )
@@ -26,6 +27,23 @@ type (
 
 		// QueryParams returns the query parameters as `*fasthttp.Args`.
 		QueryParams() *fasthttp.Args
+
+		// FormValueDefault returns form Value with fallback
+		FormValueDefault(name string, fallback string) string
+		// FormValue returns the value of requested FormField or empty String
+		FormValue(name string) string
+
+		// FormFile returns FormFile by key or error
+		FormFile(key string) (*multipart.FileHeader, error)
+
+		// Cookie returns value
+		Cookie(key string) string
+
+		// SetCookie sets 'key: value' cookies.
+		SetCookie(key, value string)
+
+		// RemoveCookie removes Cookie by key
+		RemoveCookie(key string)
 
 		// HTML sends an HTTP response with status code.
 		HTML(code int, html string) error
@@ -68,7 +86,6 @@ type (
 
 	context struct {
 		RequestCtx *fasthttp.RequestCtx
-		request    *http.Request
 		path       string
 		params     Params
 		pnames     []string
@@ -140,6 +157,43 @@ func (c *context) QueryParams() *fasthttp.Args {
 	}
 	return c.query
 }
+
+// FormStuff
+
+func (c *context) FormValueDefault(name string, fallback string) string {
+	v := c.FormValue(name)
+	if len(v) > 0 {
+		return v
+	}
+	return fallback
+}
+
+func (c *context) FormValue(name string) string {
+	return string(c.RequestCtx.FormValue(name))
+}
+
+func (c *context) FormFile(key string) (*multipart.FileHeader, error) {
+	return c.RequestCtx.FormFile(key)
+}
+
+// Cookie
+
+func (c *context) Cookie(key string) string {
+	return string(c.RequestCtx.Request.Header.Cookie(key))
+}
+func (c *context) SetCookie(key, value string) {
+	cookie := fasthttp.Cookie{}
+	cookie.SetKey(key)
+	cookie.SetValue(value)
+	c.RequestCtx.Response.Header.SetCookie(&cookie)
+}
+
+func (c *context) RemoveCookie(key string) {
+	c.RequestCtx.Response.Header.DelCookie(key)
+	c.RequestCtx.Response.Header.DelClientCookie(key)
+}
+
+// Responses
 
 func (c *context) HTML(code int, html string) (err error) {
 	return c.HTMLBlob(code, []byte(html))

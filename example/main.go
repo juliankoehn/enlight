@@ -106,9 +106,25 @@ func showHTML(c enlight.Context) error {
 }
 
 func userHandler(c enlight.Context) error {
+	cookieValue := c.Cookie("test")
+	c.SetCookie("test", "my value")
+
 	hello := c.QueryParamDefault("name", "Joseph")
 	name := c.Param("name")
-	return c.HTML(200, fmt.Sprintf("<h1>Hello %s & %s</h1>", name, hello))
+	return c.JSON(200, enlight.Map{
+		"status":        200,
+		"nameFromParam": name,
+		"nameFromQuery": hello,
+		"cookieValue":   cookieValue,
+	})
+}
+
+func postUser(c enlight.Context) error {
+	firstname := c.FormValue("firstname")
+	return c.JSON(200, enlight.Map{
+		"status":    "posted",
+		"firstname": firstname,
+	})
 }
 
 func serve() (err error) {
@@ -131,6 +147,14 @@ func serve() (err error) {
 	e.GET("/panic", PanicRoute)
 
 	e.GET("/user/:name", userHandler)
+
+	e.POST("/user", postUser)
+
+	// Cookie testing
+
+	e.GET("/cookie/:name/:value", setCookie)
+	e.GET("/cookie/:name", retrieveCookie)
+	e.DELETE("/cookie/:name", deleteCookie)
 
 	// Server header
 	e.Use(ServerHeader)
