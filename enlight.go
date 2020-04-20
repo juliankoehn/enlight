@@ -140,16 +140,16 @@ var (
 )
 
 // Any registers a new route for all HTTP methods and path with matching handler
-func (e *Enlight) Any(path string, handle HandleFunc) {
+func (e *Enlight) Any(path string, handle HandleFunc, middleware ...MiddlewareFunc) {
 	for _, m := range methods {
-		e.Router.Handle(m, path, handle, false)
+		e.Add(m, path, handle, middleware...)
 	}
 }
 
 // Match registers a new route for all given HTTP methods and path with matching handler
-func (e *Enlight) Match(methods []string, path string, handle HandleFunc) {
+func (e *Enlight) Match(methods []string, path string, handle HandleFunc, middleware ...MiddlewareFunc) {
 	for _, m := range methods {
-		e.Router.Handle(m, path, handle, false)
+		e.Add(m, path, handle, middleware...)
 	}
 }
 
