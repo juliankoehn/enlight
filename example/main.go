@@ -78,6 +78,14 @@ func (s *Stats) ProcessStats(next enlight.HandleFunc) enlight.HandleFunc {
 	}
 }
 
+// RouteBasedMiddleware demonstrates route based middleware
+func RouteBasedMiddleware(next enlight.HandleFunc) enlight.HandleFunc {
+	return func(c enlight.Context) error {
+		c.Response().Header.Set(enlight.HeaderServer, "RouteBased")
+		return next(c)
+	}
+}
+
 // Handle is the endpoint to get stats
 func (s *Stats) Handle(c enlight.Context) error {
 	s.mutex.RLock()
@@ -101,7 +109,7 @@ func serve() (err error) {
 	app.Enlight = e
 
 	e.GET("/", showHTML)
-	e.GET("/auto", getAutoHandler)
+	e.GET("/auto", getAutoHandler, RouteBasedMiddleware)
 
 	// testing Static
 	e.Static("/public", "")

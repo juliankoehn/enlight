@@ -79,48 +79,48 @@ func (e *Enlight) Use(middleware ...MiddlewareFunc) {
 }
 
 // CONNECT registers a new CONNECT route for a path with matching handler
-func (e *Enlight) CONNECT(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodConnect, path, handle, false)
+func (e *Enlight) CONNECT(path string, handle HandleFunc, m ...MiddlewareFunc) {
+	e.Add(fasthttp.MethodConnect, path, handle, m...)
 }
 
 // DELETE registers a new DELETE route for a path with matching handler
-func (e *Enlight) DELETE(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodDelete, path, handle, false)
+func (e *Enlight) DELETE(path string, handle HandleFunc, m ...MiddlewareFunc) {
+	e.Add(fasthttp.MethodDelete, path, handle, m...)
 }
 
 // GET registers a new GET route for a path withh matching handler
-func (e *Enlight) GET(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodGet, path, handle, false)
+func (e *Enlight) GET(path string, handle HandleFunc, m ...MiddlewareFunc) {
+	e.Add(fasthttp.MethodGet, path, handle, m...)
 }
 
 // HEAD registers a new HEAD route for a path withh matching handler
-func (e *Enlight) HEAD(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodHead, path, handle, false)
+func (e *Enlight) HEAD(path string, handle HandleFunc, m ...MiddlewareFunc) {
+	e.Add(fasthttp.MethodHead, path, handle, m...)
 }
 
 // OPTIONS registers a new OPTIONS route for a path withh matching handler
-func (e *Enlight) OPTIONS(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodOptions, path, handle, false)
+func (e *Enlight) OPTIONS(path string, handle HandleFunc, m ...MiddlewareFunc) {
+	e.Add(fasthttp.MethodOptions, path, handle, m...)
 }
 
 // PATCH registers a new PATCH route for a path with matching handler
-func (e *Enlight) PATCH(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodPatch, path, handle, false)
+func (e *Enlight) PATCH(path string, handle HandleFunc, m ...MiddlewareFunc) {
+	e.Add(fasthttp.MethodPatch, path, handle, m...)
 }
 
 // POST registers a new POST route for a path with matching handler
-func (e *Enlight) POST(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodPost, path, handle, false)
+func (e *Enlight) POST(path string, handle HandleFunc, m ...MiddlewareFunc) {
+	e.Add(fasthttp.MethodPost, path, handle, m...)
 }
 
 // PUT registers a new PUT route for a path with matching handler
-func (e *Enlight) PUT(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodPut, path, handle, false)
+func (e *Enlight) PUT(path string, handle HandleFunc, m ...MiddlewareFunc) {
+	e.Add(fasthttp.MethodPut, path, handle, m...)
 }
 
 // TRACE registers a new TRACE route for a path with matching handler
-func (e *Enlight) TRACE(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodTrace, path, handle, false)
+func (e *Enlight) TRACE(path string, handle HandleFunc, m ...MiddlewareFunc) {
+	e.Add(fasthttp.MethodTrace, path, handle, m...)
 }
 
 var (
@@ -166,7 +166,23 @@ func (e *Enlight) Static(prefix, root string) {
 	e.static(prefix, root, e.GET)
 }
 
-func (common) static(prefix, root string, get func(string, HandleFunc)) {
+// Add registers a new route for an HTTP method and path with matching handler
+// in the router with optional route-level middleware.
+func (e *Enlight) Add(method, path string, handle HandleFunc, middleware ...MiddlewareFunc) {
+	e.add(method, path, handle, middleware...)
+}
+func (e *Enlight) add(method, path string, handle HandleFunc, middleware ...MiddlewareFunc) {
+	e.Router.Handle(method, path, func(c Context) error {
+		h := handle
+		// Chain middleware
+		for i := len(middleware) - 1; i >= 0; i-- {
+			h = middleware[i](h)
+		}
+		return h(c)
+	}, false)
+}
+
+func (common) static(prefix, root string, get func(string, HandleFunc, ...MiddlewareFunc)) {
 	h := func(c Context) error {
 
 		p, err := url.PathUnescape(c.Param("filepath"))
