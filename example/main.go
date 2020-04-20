@@ -36,7 +36,6 @@ func NewStats() *Stats {
 func (a *App) AddDynamicRoutes(next enlight.HandleFunc) enlight.HandleFunc {
 	return func(c enlight.Context) error {
 		a.Enlight.GET("/dynamic", DynamicRoute)
-		fmt.Println("I am called before everything else")
 		return next(c)
 	}
 }
@@ -50,8 +49,6 @@ func (a *App) CleanupDynamicRoutes(next enlight.HandleFunc) enlight.HandleFunc {
 }
 
 func DynamicRoute(c enlight.Context) error {
-	fmt.Println("I am added dynamicallly to the route stack")
-
 	return c.String(200, "Hello from dynamic Route")
 }
 

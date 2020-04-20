@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/valyala/fasthttp"
 )
@@ -48,6 +49,12 @@ type (
 		// Error invokes the registered HTTP error handler. Generally used by middleware.
 		Error(err error)
 
+		// WantsJSON checks if contentType or Accept header contains "application/json"
+		WantsJSON() bool
+
+		// Peek gets value of key from header or ""
+		Peek(key string) string
+
 		// Enlight returns the `Enlight` instance
 		Enlight() *Enlight
 
@@ -71,6 +78,21 @@ const (
 	defaultMemory = 32 << 20 // 32 MB
 	indexPage     = "index.html"
 )
+
+// WantsJSON checks if contentType or Accept header contains "application/json"
+func (c *context) WantsJSON() bool {
+	contentType := c.Peek("Content-Type")
+	if contentType == "application/json" {
+		return true
+	}
+	acceptable := c.RequestCtx.Request.Header.Peek("Accept")
+	return strings.Contains(string(acceptable), "application/json")
+}
+
+// Peek gets value of key from header or ""
+func (c *context) Peek(key string) string {
+	return string(c.RequestCtx.Request.Header.Peek(key))
+}
 
 func (c *context) Handler() HandleFunc {
 	return c.handler
