@@ -80,7 +80,7 @@ func NewRouter() *Router {
 }
 
 // Handle registers a new request handle with the given path and method.
-func (r *Router) Handle(method, path string, handle HandleFunc) {
+func (r *Router) Handle(method, path string, handle HandleFunc, once bool) {
 
 	if method == "" {
 		panic("method must not be empty")
@@ -112,7 +112,7 @@ func (r *Router) Handle(method, path string, handle HandleFunc) {
 		r.globalAllowed = r.allowed("*", "")
 	}
 
-	root.addRoute(path, handle)
+	root.addRoute(path, handle, once)
 
 	// Update maxParams
 	if paramsCount := countParams(path); paramsCount+varsCount > r.maxParams {
@@ -181,6 +181,13 @@ func (r *Router) allowed(path, reqMethod string) (allow string) {
 func (r *Router) saveMatchedRoutePath(path string, handle HandleFunc) HandleFunc {
 	return func(c Context) error {
 		return handle(c)
+	}
+}
+
+// Drop removes a Route from tree
+func (r *Router) Drop(method, path string) {
+	if root := r.trees[method]; root != nil {
+		root.dropRoute(path)
 	}
 }
 

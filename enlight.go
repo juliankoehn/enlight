@@ -3,12 +3,10 @@ package enlight
 import (
 	"fmt"
 	"io"
-	"net"
 	"net/url"
 	"path"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/valyala/fasthttp"
 )
@@ -22,9 +20,8 @@ type Enlight struct {
 	Router           *Router
 	Server           *fasthttp.Server
 	TLSServer        *fasthttp.Server
-	Listener         net.Listener
-	TLSListener      net.Listener
 	premiddleware    []MiddlewareFunc
+	aftermiddleware  []MiddlewareFunc
 	middleware       []MiddlewareFunc
 	HTTPErrorHandler HTTPErrorHandler
 	pool             sync.Pool
@@ -71,54 +68,59 @@ func (e *Enlight) Before(middleware ...MiddlewareFunc) {
 	e.premiddleware = append(e.premiddleware, middleware...)
 }
 
+// After adds middleware to the chain which is run after router.
+func (e *Enlight) After(middleware ...MiddlewareFunc) {
+	e.aftermiddleware = append(e.aftermiddleware, middleware...)
+}
+
 // Use adds middleware to the chain which is run after router
 func (e *Enlight) Use(middleware ...MiddlewareFunc) {
 	e.middleware = append(e.middleware, middleware...)
 }
 
 // CONNECT registers a new CONNECT route for a path with matching handler
-func (e *Enlight) CONNECT(path string, h HandleFunc) {
-	e.Router.Handle(fasthttp.MethodConnect, path, h)
+func (e *Enlight) CONNECT(path string, handle HandleFunc) {
+	e.Router.Handle(fasthttp.MethodConnect, path, handle, false)
 }
 
 // DELETE registers a new DELETE route for a path with matching handler
 func (e *Enlight) DELETE(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodDelete, path, handle)
+	e.Router.Handle(fasthttp.MethodDelete, path, handle, false)
 }
 
 // GET registers a new GET route for a path withh matching handler
 func (e *Enlight) GET(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodGet, path, handle)
+	e.Router.Handle(fasthttp.MethodGet, path, handle, false)
 }
 
 // HEAD registers a new HEAD route for a path withh matching handler
 func (e *Enlight) HEAD(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodHead, path, handle)
+	e.Router.Handle(fasthttp.MethodHead, path, handle, false)
 }
 
 // OPTIONS registers a new OPTIONS route for a path withh matching handler
 func (e *Enlight) OPTIONS(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodOptions, path, handle)
+	e.Router.Handle(fasthttp.MethodOptions, path, handle, false)
 }
 
 // PATCH registers a new PATCH route for a path with matching handler
 func (e *Enlight) PATCH(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodPatch, path, handle)
+	e.Router.Handle(fasthttp.MethodPatch, path, handle, false)
 }
 
 // POST registers a new POST route for a path with matching handler
 func (e *Enlight) POST(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodPost, path, handle)
+	e.Router.Handle(fasthttp.MethodPost, path, handle, false)
 }
 
 // PUT registers a new PUT route for a path with matching handler
 func (e *Enlight) PUT(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodPut, path, handle)
+	e.Router.Handle(fasthttp.MethodPut, path, handle, false)
 }
 
 // TRACE registers a new TRACE route for a path with matching handler
 func (e *Enlight) TRACE(path string, handle HandleFunc) {
-	e.Router.Handle(fasthttp.MethodTrace, path, handle)
+	e.Router.Handle(fasthttp.MethodTrace, path, handle, false)
 }
 
 var (
@@ -140,14 +142,20 @@ var (
 // Any registers a new route for all HTTP methods and path with matching handler
 func (e *Enlight) Any(path string, handle HandleFunc) {
 	for _, m := range methods {
-		e.Router.Handle(m, path, handle)
+		e.Router.Handle(m, path, handle, false)
 	}
 }
 
+// Match registers a new route for all given HTTP methods and path with matching handler
 func (e *Enlight) Match(methods []string, path string, handle HandleFunc) {
 	for _, m := range methods {
-		e.Router.Handle(m, path, handle)
+		e.Router.Handle(m, path, handle, false)
 	}
+}
+
+// Drop removes a route from router-tree
+func (e *Enlight) Drop(method, path string) {
+	e.Router.Drop(method, path)
 }
 
 // Static serves static files
@@ -182,23 +190,43 @@ func (e *Enlight) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	// Acquire context
 	c := e.pool.Get().(*context)
 	c.Reset(ctx)
-	// this is were we call the "preMiddleware"
-	// the pre middleware allows us to cast dynamic routes to our router
-	// we must register them and deregister them afterwards
 
 	h := NotFoundHandler
 
 	if e.premiddleware == nil {
 		e.Router.Find(c)
-		h = c.handler
+		h = c.Handler()
 		h = applyMiddleware(h, e.middleware...)
 	} else {
-
+		h = func(c Context) error {
+			e.Router.Find(c)
+			h := c.Handler()
+			h = applyMiddleware(h, e.middleware...)
+			return h(c)
+		}
+		h = applyMiddleware(h, e.premiddleware...)
 	}
 
 	if err := h(c); err != nil {
 		fmt.Println(err)
 		e.HTTPErrorHandler(err, c)
+	}
+
+	// the last handleFunc is usually returning nil
+	//
+
+	if e.aftermiddleware != nil {
+		after := func(c Context) error {
+			// middlewares are calling next(c)
+			// it's not always clear if it's the last in chain
+			return nil
+		}
+		after = applyMiddleware(after, e.aftermiddleware...)
+
+		if err := after(c); err != nil {
+			fmt.Println(err)
+			e.HTTPErrorHandler(err, c)
+		}
 	}
 
 	// Clearing ref to fasthttp
@@ -213,58 +241,17 @@ func (e *Enlight) Start(address string) error {
 
 // StartServer starts a custom http server.
 func (e *Enlight) StartServer(address string) (err error) {
-	if e.Listener == nil {
-		e.Listener, err = newListener(address)
-		if err != nil {
-			return err
-		}
-	}
-	fmt.Printf("⇨ http server started on %s\n", e.Listener.Addr())
-	return fasthttp.Serve(e.Listener, e.ServeHTTP)
-	//return s.Serve(e.Listener)
-}
-
-// Close immediately stops the listeners.
-func (e *Enlight) Close() error {
-	if e.TLSListener != nil {
-		if err := e.TLSListener.Close(); err != nil {
-			return err
-		}
+	e.Server = &fasthttp.Server{
+		Name:    "Enlight",
+		Handler: e.ServeHTTP,
 	}
 
-	return e.Listener.Close()
+	fmt.Printf("⇨ http server started on %s\n", address)
+	return e.Server.ListenAndServe(address)
 }
 
 // Shutdown stops the server gracefully.
 func (e *Enlight) Shutdown() error {
 	fmt.Print("⇨ Server is shutting down...")
 	return e.Server.Shutdown()
-}
-
-// tcpKeepAliveListener sets TCP keep-alive timeouts on accepted
-// connections. It's used by ListenAndServe and ListenAndServeTLS so
-// dead TCP connections (e.g. closing laptop mid-download) eventually
-// go away.
-type tcpKeepAliveListener struct {
-	*net.TCPListener
-}
-
-func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
-	if c, err = ln.AcceptTCP(); err != nil {
-		return
-	} else if err = c.(*net.TCPConn).SetKeepAlive(true); err != nil {
-		return
-	}
-	// Ignore error from setting the KeepAlivePeriod as some systems, such as
-	// OpenBSD, do not support setting TCP_USER_TIMEOUT on IPPROTO_TCP
-	_ = c.(*net.TCPConn).SetKeepAlivePeriod(3 * time.Minute)
-	return
-}
-
-func newListener(address string) (*tcpKeepAliveListener, error) {
-	l, err := net.Listen("tcp", address)
-	if err != nil {
-		return nil, err
-	}
-	return &tcpKeepAliveListener{l.(*net.TCPListener)}, nil
 }

@@ -3,14 +3,13 @@ package enlight
 import (
 	"errors"
 	"fmt"
-	"net/http"
 
 	"github.com/valyala/fasthttp"
 )
 
 // Errors
 var (
-	ErrNotFound            = NewHTTPError(http.StatusNotFound)
+	ErrNotFound            = NewHTTPError(fasthttp.StatusNotFound)
 	ErrInvalidRedirectCode = errors.New("invalid redirect status code")
 )
 
@@ -21,10 +20,11 @@ type HTTPError struct {
 	Internal error       `json:"-"` // Stores the error returned by an external dependency
 }
 
+// NewHTTPError creates a new HTTPError
 func NewHTTPError(code int, message ...interface{}) *HTTPError {
 	he := &HTTPError{
 		Code:    code,
-		Message: http.StatusText(code),
+		Message: fasthttp.StatusMessage(code),
 	}
 	if len(message) > 0 {
 		he.Message = message[0]
@@ -61,8 +61,8 @@ func (e *Enlight) DefaultHTTPErrorHandler(err error, c Context) {
 		}
 	} else {
 		he = &HTTPError{
-			Code:    http.StatusInternalServerError,
-			Message: http.StatusText(http.StatusInternalServerError),
+			Code:    fasthttp.StatusInternalServerError,
+			Message: fasthttp.StatusMessage(fasthttp.StatusInternalServerError),
 		}
 	}
 

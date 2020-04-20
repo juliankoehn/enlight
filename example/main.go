@@ -1,16 +1,88 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"os"
-	"os/signal"
+	"strconv"
+	"sync"
+	"time"
 
 	"github.com/juliankoehn/enlight"
+	"github.com/valyala/fasthttp"
 )
 
-type TestStruct struct {
-	Message string `json:"message"`
+type (
+	App struct {
+		Enlight *enlight.Enlight
+	}
+	TestStruct struct {
+		Message string `json:"message"`
+	}
+	Stats struct {
+		Uptime       time.Time      `json:"uptime"`
+		RequestCount uint64         `json:"requestCount"`
+		Statuses     map[string]int `json:"statuses"`
+		mutex        sync.RWMutex
+	}
+)
+
+func NewStats() *Stats {
+	return &Stats{
+		Uptime:   time.Now(),
+		Statuses: map[string]int{},
+	}
+}
+
+// AddDynamicRoutes middleware to add dynamic routes before "routing happens"
+func (a *App) AddDynamicRoutes(next enlight.HandleFunc) enlight.HandleFunc {
+	return func(c enlight.Context) error {
+		a.Enlight.GET("/dynamic", DynamicRoute)
+		fmt.Println("I am called before everything else")
+		return next(c)
+	}
+}
+
+// CleanupDynamicRoutes removes dynamic routes after serve
+func (a *App) CleanupDynamicRoutes(next enlight.HandleFunc) enlight.HandleFunc {
+	return func(c enlight.Context) error {
+		a.Enlight.Drop("GET", "/dynamic")
+		return next(c)
+	}
+}
+
+func DynamicRoute(c enlight.Context) error {
+	fmt.Println("I am added dynamicallly to the route stack")
+
+	return c.String(200, "Hello from dynamic Route")
+}
+
+// ServerHeader middleware adds a `Server` header to the response.
+func ServerHeader(next enlight.HandleFunc) enlight.HandleFunc {
+	return func(c enlight.Context) error {
+		c.Response().Header.Set(enlight.HeaderServer, "Enlight/3.0")
+		return next(c)
+	}
+}
+
+// ProcessStats is the middleware function.
+func (s *Stats) ProcessStats(next enlight.HandleFunc) enlight.HandleFunc {
+	return func(c enlight.Context) error {
+		if err := next(c); err != nil {
+			c.Error(err)
+		}
+		s.mutex.Lock()
+		defer s.mutex.Unlock()
+		s.RequestCount++
+		status := strconv.Itoa(c.Response().StatusCode())
+		s.Statuses[status]++
+		return nil
+	}
+}
+
+// Handle is the endpoint to get stats
+func (s *Stats) Handle(c enlight.Context) error {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return c.JSON(fasthttp.StatusOK, s)
 }
 
 func getAutoHandler(c enlight.Context) error {
@@ -23,44 +95,38 @@ func showHTML(c enlight.Context) error {
 	return c.HTML(200, "<h1>Hello World</h1>")
 }
 
-func serve(ctx context.Context) (err error) {
+func serve() (err error) {
+	app := &App{}
 	e := enlight.New()
+	app.Enlight = e
+
 	e.GET("/", showHTML)
 	e.GET("/auto", getAutoHandler)
 
+	// testing Static
 	e.Static("/public", "")
 
-	go func() {
-		if err := e.Start(":8085"); err != nil {
-			fmt.Printf("listen:%+s\n", err)
-		}
-	}()
+	s := NewStats()
+	e.Use(s.ProcessStats)
+	e.GET("/stats", s.Handle)
 
-	<-ctx.Done()
+	// Server header
+	e.Use(ServerHeader)
 
-	if err = e.Shutdown(); err != nil {
-		fmt.Printf("server Shutdown Failed:%+s\n", err)
+	e.Before(app.AddDynamicRoutes)
+
+	e.After(app.CleanupDynamicRoutes)
+
+	if err = e.Start(":8085"); err != nil {
+		fmt.Printf("listen:%+s\n", err)
+		return err
 	}
-
-	fmt.Printf("server exited properly\n")
 
 	return
 }
 
 func main() {
-	c := make(chan os.Signal, 1)
-
-	signal.Notify(c, os.Interrupt)
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	go func() {
-		oscall := <-c
-		fmt.Printf("system call:%+v\n", oscall)
-		cancel()
-	}()
-
-	if err := serve(ctx); err != nil {
+	if err := serve(); err != nil {
 		fmt.Printf("failed to serve:+%v\n", err)
 	}
 }

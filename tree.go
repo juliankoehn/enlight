@@ -26,6 +26,7 @@ type node struct {
 	wildChild bool
 	nType     nodeType
 	priority  uint32
+	once      bool // node gets destroyed on call
 }
 
 func countParams(path string) uint16 {
@@ -104,16 +105,103 @@ func (n *node) incrementChildPrio(pos int) int {
 	return newPos
 }
 
+func (n *node) dropRoute(path string) {
+	var handle HandleFunc
+	var p Params
+	parent := n
+walk:
+	for {
+		prefix := n.path
+		if len(path) > len(prefix) {
+			if path[:len(prefix)] == prefix {
+				path = path[len(prefix):]
+				if !n.wildChild {
+					idxc := path[0]
+					for i, c := range []byte(n.indices) {
+						if c == idxc {
+							parent = n
+							n = n.children[i]
+							continue walk
+						}
+					}
+					return
+
+				}
+				// Handle wildcard child
+				n = n.children[0]
+				switch n.nType {
+				case param:
+					// Find param end (either '/' or path end)
+					end := 0
+					for end < len(path) && path[end] != '/' {
+						end++
+					}
+					// We need to go deeper!
+					if end < len(path) {
+						if len(n.children) > 0 {
+							path = path[end:]
+							parent = n
+							n = n.children[0]
+							continue walk
+						}
+						return
+					}
+
+					if handle = n.handle; handle != nil {
+						return
+					} else if len(n.children) == 1 {
+						// No handle found. Check if a handle for this path + a
+						// trailing slash exists for TSR recommendation
+						n = n.children[0]
+					}
+
+					return
+				case catchAll:
+					if p == nil {
+						// lazy allocation
+						p = make(Params, 0, n.maxParams)
+					}
+					p = append(p, Param{
+						Key:   n.path[2:],
+						Value: path,
+					})
+
+					handle = n.handle
+					return
+				default:
+					panic("invalid node type")
+				}
+			}
+
+		} else if path == prefix {
+			var idxcPos int
+			children := []*node{}
+			for key, value := range parent.children {
+				if value.path != prefix {
+					children = append(children, value)
+				} else {
+					idxcPos = key
+				}
+			}
+			// remove key from indices...
+			parent.indices = parent.indices[0:idxcPos] + parent.indices[idxcPos+1:]
+			// replace children by new children
+			parent.children = children
+			return
+		}
+	}
+}
+
 // addRoute adds a node with the given handle to the path.
 // Not concurrency-safe!
-func (n *node) addRoute(path string, handle HandleFunc) {
+func (n *node) addRoute(path string, handle HandleFunc, once bool) {
 	fullPath := path
 	n.priority++
 	numParams := countParams(path)
 
 	// Empty tree
 	if len(n.path) == 0 && len(n.indices) == 0 {
-		n.insertChild(path, fullPath, handle)
+		n.insertChild(path, fullPath, handle, once)
 		n.nType = root
 		return
 	}
@@ -139,6 +227,7 @@ walk:
 				children:  n.children,
 				handle:    n.handle,
 				priority:  n.priority - 1,
+				once:      once,
 			}
 
 			// Update maxParams (max of all children)
@@ -158,6 +247,7 @@ walk:
 
 		// Make new node a child of this node
 		if i < len(path) {
+
 			path = path[i:]
 
 			if n.wildChild {
@@ -216,12 +306,13 @@ walk:
 				n.indices += string([]byte{idxc})
 				child := &node{
 					maxParams: numParams,
+					once:      once,
 				}
 				n.children = append(n.children, child)
 				n.incrementChildPrio(len(n.indices) - 1)
 				n = child
 			}
-			n.insertChild(path, fullPath, handle)
+			n.insertChild(path, fullPath, handle, once)
 			return
 		}
 
@@ -234,7 +325,7 @@ walk:
 	}
 }
 
-func (n *node) insertChild(path, fullPath string, handle HandleFunc) {
+func (n *node) insertChild(path, fullPath string, handle HandleFunc, once bool) {
 	for {
 		// Find prefix until first wildcard
 		wildcard, i, valid := findWildcard(path)
@@ -271,6 +362,7 @@ func (n *node) insertChild(path, fullPath string, handle HandleFunc) {
 			child := &node{
 				nType: param,
 				path:  wildcard,
+				once:  once,
 			}
 			n.children = []*node{child}
 			n = child
@@ -314,6 +406,7 @@ func (n *node) insertChild(path, fullPath string, handle HandleFunc) {
 		child := &node{
 			wildChild: true,
 			nType:     catchAll,
+			once:      once,
 		}
 		n.children = []*node{child}
 		n.indices = string('/')
@@ -326,6 +419,7 @@ func (n *node) insertChild(path, fullPath string, handle HandleFunc) {
 			nType:    catchAll,
 			handle:   handle,
 			priority: 1,
+			once:     once,
 		}
 		n.children = []*node{child}
 
@@ -343,6 +437,7 @@ func (n *node) insertChild(path, fullPath string, handle HandleFunc) {
 // made if a handle exists with an extra (without the) trailing slash for the
 // given path.
 func (n *node) getValue(path string) (handle HandleFunc, p Params, tsr bool) {
+
 walk: // Outer loop for walking the tree
 	for {
 		prefix := n.path
@@ -419,6 +514,7 @@ walk: // Outer loop for walking the tree
 				}
 			}
 		} else if path == prefix {
+
 			// We should have reached the node containing the handle.
 			// Check if this node has a handle registered.
 			if handle = n.handle; handle != nil {

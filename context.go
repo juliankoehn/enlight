@@ -13,6 +13,7 @@ type (
 	// response objects, path, path parameters, data and registered handler.
 	Context interface {
 		Request() *fasthttp.RequestCtx
+		Response() *fasthttp.Response
 
 		// Param returns path parameter by name.
 		Param(name string) string
@@ -44,8 +45,13 @@ type (
 		// Redirect redirects the request to a provided URL with status code.
 		Redirect(code int, url string) error
 
+		// Error invokes the registered HTTP error handler. Generally used by middleware.
+		Error(err error)
+
 		// Enlight returns the `Enlight` instance
 		Enlight() *Enlight
+
+		Handler() HandleFunc
 	}
 
 	context struct {
@@ -65,6 +71,14 @@ const (
 	defaultMemory = 32 << 20 // 32 MB
 	indexPage     = "index.html"
 )
+
+func (c *context) Handler() HandleFunc {
+	return c.handler
+}
+
+func (c *context) Response() *fasthttp.Response {
+	return &c.RequestCtx.Response
+}
 
 func (c *context) Request() *fasthttp.RequestCtx {
 	return c.RequestCtx
@@ -135,6 +149,10 @@ func (c *context) JSON(code int, i interface{}) (err error) {
 func (c *context) File(file string) (err error) {
 	c.RequestCtx.SendFile(file)
 	return
+}
+
+func (c *context) Error(err error) {
+	c.enlight.HTTPErrorHandler(err, c)
 }
 
 func (c *context) Enlight() *Enlight {

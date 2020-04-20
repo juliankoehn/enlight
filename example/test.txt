@@ -1,1 +1,1 @@
-hallo
+I am a static test file you can serve my by calling /public/test.txt
