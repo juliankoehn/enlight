@@ -106,7 +106,7 @@ func showHTML(c enlight.Context) error {
 }
 
 func userHandler(c enlight.Context) error {
-	hello := string(c.QueryParams().Peek("name"))
+	hello := c.QueryParamDefault("name", "Joseph")
 	name := c.Param("name")
 	return c.HTML(200, fmt.Sprintf("<h1>Hello %s & %s</h1>", name, hello))
 }

@@ -18,6 +18,12 @@ type (
 		// Param returns path parameter by name.
 		Param(name string) string
 
+		// QueryParamDefault returns the requested Param, if empty returns fallback
+		QueryParamDefault(name string, fallback string) string
+
+		// QueryParam returns Param or empty string
+		QueryParam(name string) string
+
 		// QueryParams returns the query parameters as `*fasthttp.Args`.
 		QueryParams() *fasthttp.Args
 
@@ -113,6 +119,21 @@ func (c *context) ParamNames() []string {
 	return c.pnames
 }
 
+// QueryParamDefault returns the requested Param, if empty returns fallback
+func (c *context) QueryParamDefault(name string, fallback string) string {
+	p := c.QueryParam(name)
+	if p == "" {
+		p = fallback
+	}
+	return p
+}
+
+// QueryParam returns Param or empty string
+func (c *context) QueryParam(name string) string {
+	return string(c.QueryParams().Peek(name))
+}
+
+// QueryParams returns the query parameters as `*fasthttp.Args`.
 func (c *context) QueryParams() *fasthttp.Args {
 	if c.query == nil {
 		c.query = c.RequestCtx.QueryArgs()
