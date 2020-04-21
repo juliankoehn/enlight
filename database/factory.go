@@ -47,7 +47,7 @@ func (f *factory) Make(config *ConnectionConfig, name string) (*Connection, erro
 	}
 
 	// set database
-	_, err = conn.DB.Exec(fmt.Sprintf("use %s;", config.Database))
+	_, err = conn.DB.Exec(fmt.Sprintf("USE %s;", config.Database))
 	if err != nil {
 		if strings.Contains(err.Error(), "Unknown database") {
 			_, err = conn.DB.Exec(fmt.Sprintf("CREATE DATABASE %s;", config.Database))
@@ -59,6 +59,8 @@ func (f *factory) Make(config *ConnectionConfig, name string) (*Connection, erro
 		}
 	}
 
+	conn.SetConfig(*config)
+	conn.tablePrefix = config.Prefix
 	return conn, err
 }
 
@@ -73,6 +75,7 @@ func (f *factory) createConnector(config *ConnectionConfig) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		config.URL = dsn
 		return dsn, nil
 	case "pgsql":
 	case "sqlite":
@@ -168,10 +171,8 @@ func (f *factory) openConnection(driver string, dataSourceName string) (*Connect
 	if err != nil {
 		return nil, err
 	}
-	return &Connection{
-		DB:     db,
-		Driver: driver,
-	}, nil
+
+	return NewConnection(db, driver), nil
 }
 
 func getTLSConfigClone(key string) (config *tls.Config) {

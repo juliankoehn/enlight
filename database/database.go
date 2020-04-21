@@ -2,7 +2,6 @@ package database
 
 import (
 	"crypto/tls"
-	"database/sql"
 	"fmt"
 )
 
@@ -10,13 +9,8 @@ type (
 	// Manager manages Databases
 	Manager struct {
 		config      Config
-		Connections map[string]*Connection
-	}
-
-	// Connection holds the actual database Connection
-	Connection struct {
-		*sql.DB
-		Driver string
+		Factory     *factory
+		Connections Connections
 	}
 
 	// ConnectionConfig holds Connection Options for a Database
@@ -54,9 +48,11 @@ type (
 func New() *Manager {
 	conns := make(map[string]*ConnectionConfig)
 	connections := make(map[string]*Connection)
+	factory := NewFactory()
 
 	return &Manager{
 		Connections: connections,
+		Factory:     factory,
 		config: Config{
 			connections: conns,
 		},
@@ -65,20 +61,56 @@ func New() *Manager {
 
 // GetConnection gets a database connection instance
 func (m *Manager) GetConnection(name string) (*Connection, error) {
+	var err error
 	name = m.parseConnectionName(name)
 
 	conn := m.Connections[name]
 	if conn == nil {
-		err := m.makeConnection(name)
+		conn, err = m.makeConnection(name)
 		if err != nil {
 			return nil, err
 		}
-	}
 
+		m.Connections[name] = conn
+	}
 	return conn, nil
 }
 
+// GetConnections returns Connections
+func (m *Manager) GetConnections() Connections {
+	return m.Connections
+}
+
+// Disconnect disconnects from the given database
+func (m *Manager) Disconnect(name string) error {
+	if conn, ok := m.Connections[name]; ok {
+		if err := conn.Close(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return fmt.Errorf("connection with name [%s] not found", name)
+}
+
+// Reconnect to given database
+func (m *Manager) Reconnect(name string) (*Connection, error) {
+	if name == "" {
+		name = m.GetDefaultConnection()
+	}
+	// disconnect from database
+	if err := m.Disconnect(name); err != nil {
+		return nil, err
+	}
+	if _, ok := m.Connections[name]; !ok {
+		return m.GetConnection(name)
+	}
+	// reconenct to database
+	return m.makeConnection(name)
+}
+
 // AddConnection registers a connection with the Manager
+// If it's the first connection it gets automatically set to default
 func (m *Manager) AddConnection(conn *ConnectionConfig, name string) {
 	m.config.connections[name] = conn
 
@@ -105,15 +137,20 @@ func (m *Manager) parseConnectionName(name string) string {
 	return name
 }
 
-func (m *Manager) makeConnection(name string) error {
+func (m *Manager) makeConnection(name string) (*Connection, error) {
 	config, err := m.getConfig(name)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	_ = config
+	conn, err := m.Factory.Make(config, name)
+	if err != nil {
+		return nil, err
+	}
 
-	return nil
+	conn.config = *config
+
+	return conn, nil
 }
 
 // getConfig gets the configuration for a connection
