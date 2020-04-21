@@ -6,27 +6,6 @@ import (
 )
 
 type (
-	// ColumnDefinition holds definitions of columns
-	ColumnDefinition struct {
-		Typ           string // kind of column, string / int
-		Name          string // name of column
-		Length        string // length of column
-		Total         int
-		Places        int
-		Allowed       []string // allowed values
-		Precision     int
-		UseCurrent    bool   // CURRENT TIMESTAMP
-		StoredAs      string // stored column
-		VirtualAs     string // virtual column
-		AutoIncrement bool
-		Unsigned      bool
-	}
-	// ColumnOptions are given to addColumn
-	ColumnOptions struct {
-		Length        int
-		AutoIncrement bool
-		Unsigned      bool
-	}
 	// Blueprint is a
 	Blueprint struct {
 		table     string              // the table the blueprint describes.
@@ -76,6 +55,26 @@ func (b *Blueprint) addColumn(typ, name string, options *ColumnOptions) *ColumnD
 	if options != nil {
 		if options.Length > 0 {
 			definition.Length = strconv.Itoa(options.Length)
+		}
+		if options.AutoIncrement {
+			definition.AutoIncrement = true
+		}
+		if options.Unsigned {
+			definition.Unsigned = true
+		}
+		if options.Total > 0 {
+			definition.Total = options.Total
+		}
+		if options.Places > 0 {
+			definition.Places = options.Places
+		}
+
+		if len(options.Allowed) > 0 {
+			definition.Allowed = options.Allowed
+		}
+
+		if options.Precision > 0 {
+			definition.Precision = options.Precision
 		}
 	}
 
@@ -198,6 +197,269 @@ func (b *Blueprint) UnsignedMediumInteger(column string, autoIncrement bool) *Co
 // UnsignedBigInteger create a new big integer (8-byte) column on the table
 func (b *Blueprint) UnsignedBigInteger(column string, autoIncrement bool) *ColumnDefinition {
 	return b.BigInteger(column, autoIncrement, true)
+}
+
+// Float create a new float column on the table.
+func (b *Blueprint) Float(column string, total, places int, unsigned bool) *ColumnDefinition {
+	if total == 0 {
+		total = 8
+	}
+	if places == 0 {
+		places = 2
+	}
+
+	return b.addColumn("float", column, &ColumnOptions{
+		Total:    total,
+		Places:   places,
+		Unsigned: unsigned,
+	})
+}
+
+// Double create a new Double column on the table.
+func (b *Blueprint) Double(column string, total, places int, unsigned bool) *ColumnDefinition {
+	return b.addColumn("double", column, &ColumnOptions{
+		Total:    total,
+		Places:   places,
+		Unsigned: unsigned,
+	})
+}
+
+// Decimal create a new Double column on the table.
+func (b *Blueprint) Decimal(column string, total, places int, unsigned bool) *ColumnDefinition {
+	if total == 0 {
+		total = 8
+	}
+	if places == 0 {
+		places = 2
+	}
+	return b.addColumn("decimal", column, &ColumnOptions{
+		Total:    total,
+		Places:   places,
+		Unsigned: unsigned,
+	})
+}
+
+// UnsignedFloat create a new funsigned loat column on the table.
+func (b *Blueprint) UnsignedFloat(column string, total, places int, unsigned bool) *ColumnDefinition {
+	return b.Float(column, total, places, true)
+}
+
+// UnsignedDouble create a new unsigned double column on the table.
+func (b *Blueprint) UnsignedDouble(column string, total, places int, unsigned bool) *ColumnDefinition {
+	return b.Double(column, total, places, true)
+}
+
+// UnsignedDecimal create a new unsigned decimal column on the table.
+func (b *Blueprint) UnsignedDecimal(column string, total, places int, unsigned bool) *ColumnDefinition {
+	return b.Decimal(column, total, places, true)
+}
+
+// Boolean create a new boolean column on the table
+func (b *Blueprint) Boolean(column string, autoIncrement, unsigned bool) *ColumnDefinition {
+	return b.addColumn("boolean", column, nil)
+}
+
+// Enum create a new enum column on the table
+func (b *Blueprint) Enum(column string, allowed []string) *ColumnDefinition {
+	return b.addColumn("enum", column, &ColumnOptions{
+		Allowed: allowed,
+	})
+}
+
+// Set create a new set column on the table
+func (b *Blueprint) Set(column string, allowed []string) *ColumnDefinition {
+	return b.addColumn("set", column, &ColumnOptions{
+		Allowed: allowed,
+	})
+}
+
+// JSON create a new json column on the table
+func (b *Blueprint) JSON(column string) *ColumnDefinition {
+	return b.addColumn("json", column, nil)
+}
+
+// JSONB create a new jsonb column on the table
+func (b *Blueprint) JSONB(column string) *ColumnDefinition {
+	return b.addColumn("jsonb", column, nil)
+}
+
+// Date create a new Date column on the table
+func (b *Blueprint) Date(column string) *ColumnDefinition {
+	return b.addColumn("date", column, nil)
+}
+
+// DateTime create a new dateTime column on the table
+func (b *Blueprint) DateTime(column string, precision int) *ColumnDefinition {
+	return b.addColumn("dateTime", column, &ColumnOptions{
+		Precision: precision,
+	})
+}
+
+// DateTimeTz create a new date-time column (with time zone) on the table
+func (b *Blueprint) DateTimeTz(column string, precision int) *ColumnDefinition {
+	return b.addColumn("dateTimeTz", column, &ColumnOptions{
+		Precision: precision,
+	})
+}
+
+// Time create a new time column on the table.
+func (b *Blueprint) Time(column string, precision int) *ColumnDefinition {
+	return b.addColumn("time", column, &ColumnOptions{
+		Precision: precision,
+	})
+}
+
+// TimeTz create a new time column (with time zone) on the table.
+func (b *Blueprint) TimeTz(column string, precision int) *ColumnDefinition {
+	return b.addColumn("timeTz", column, &ColumnOptions{
+		Precision: precision,
+	})
+}
+
+// Timestamp create a new timestamp column on the table.
+func (b *Blueprint) Timestamp(column string, precision int) *ColumnDefinition {
+	return b.addColumn("timestamp", column, &ColumnOptions{
+		Precision: precision,
+	})
+}
+
+// TimestampTz create a new timestamp (with time zone) column on the table.
+func (b *Blueprint) TimestampTz(column string, precision int) *ColumnDefinition {
+	return b.addColumn("timestampTz", column, &ColumnOptions{
+		Precision: precision,
+	})
+}
+
+// Timestamps add nullable creation and update timestamps to the table.
+func (b *Blueprint) Timestamps(precision int) {
+	b.Timestamp("created_at", precision).Nullable()
+	b.Timestamp("updated_at", precision).Nullable()
+}
+
+// TimestampsTz add nullable creation and update timestampTz columns to the table.
+func (b *Blueprint) TimestampsTz(precision int) {
+	b.TimestampTz("created_at", precision).Nullable()
+	b.TimestampTz("updated_at", precision).Nullable()
+}
+
+// SoftDeletes add a "deleted at" timestamp for the table.
+func (b *Blueprint) SoftDeletes(precision int) *ColumnDefinition {
+	return b.Timestamp("deleted_at", precision).Nullable()
+}
+
+// SoftDeletesTz add a "deleted at" timestamp (with time zone) for the table.
+func (b *Blueprint) SoftDeletesTz(precision int) *ColumnDefinition {
+	return b.TimestampTz("deleted_at", precision).Nullable()
+}
+
+// Year create a new year column on the table.
+func (b *Blueprint) Year(column string) *ColumnDefinition {
+	return b.addColumn("year", column, nil)
+}
+
+// Binary create a new binary column on the table.
+func (b *Blueprint) Binary(column string) *ColumnDefinition {
+	return b.addColumn("binary", column, nil)
+}
+
+// UUID create a new UUID column on the table.
+func (b *Blueprint) UUID(column string) *ColumnDefinition {
+	return b.addColumn("uuid", column, nil)
+}
+
+// IPAddress create a new IPAddress column on the table.
+func (b *Blueprint) IPAddress(column string) *ColumnDefinition {
+	return b.addColumn("ipAddress", column, nil)
+}
+
+// MacAddress create a new MacAddress column on the table.
+func (b *Blueprint) MacAddress(column string) *ColumnDefinition {
+	return b.addColumn("macAddress", column, nil)
+}
+
+// Geometry create a new Geometry column on the table.
+func (b *Blueprint) Geometry(column string) *ColumnDefinition {
+	return b.addColumn("geometry", column, nil)
+}
+
+// Point create a new point column on the table.
+func (b *Blueprint) Point(column string) *ColumnDefinition {
+	return b.addColumn("point", column, nil)
+}
+
+// LineString create a new linestring column on the table.
+func (b *Blueprint) LineString(column string) *ColumnDefinition {
+	return b.addColumn("linestring", column, nil)
+}
+
+// Polygon create a new polygon column on the table.
+func (b *Blueprint) Polygon(column string) *ColumnDefinition {
+	return b.addColumn("polygon", column, nil)
+}
+
+// GeometryCollection create a new geometrycollection column on the table.
+func (b *Blueprint) GeometryCollection(column string) *ColumnDefinition {
+	return b.addColumn("geometrycollection", column, nil)
+}
+
+// MultiPoint create a new multiPoint column on the table.
+func (b *Blueprint) MultiPoint(column string) *ColumnDefinition {
+	return b.addColumn("multiPoint", column, nil)
+}
+
+// MultiLineString create a new multilinestring column on the table.
+func (b *Blueprint) MultiLineString(column string) *ColumnDefinition {
+	return b.addColumn("multilinestring", column, nil)
+}
+
+// MultiPolygon create a new multipolygon column on the table.
+func (b *Blueprint) MultiPolygon(column string) *ColumnDefinition {
+	return b.addColumn("multipolygon", column, nil)
+}
+
+// MultiPolygonZ create a new multipolygonz column on the table.
+func (b *Blueprint) MultiPolygonZ(column string) *ColumnDefinition {
+	return b.addColumn("multipolygonz", column, nil)
+}
+
+// Morphs add the proper columns for a polymorphic table.
+func (b *Blueprint) Morphs(column string, indexName string) {
+	b.String(column+"_type", 0)
+	b.UnsignedBigInteger(column+"_id", false)
+	b.Index([]string{column + "_type", column + "_id"}, indexName, "")
+}
+
+// NullableMorphs add nullable columns for a polymorphic table.
+func (b *Blueprint) NullableMorphs(column string, indexName string) {
+	b.String(column+"_type", 0).Nullable()
+	b.UnsignedBigInteger(column+"_id", false).Nullable()
+	b.Index([]string{column + "_type", column + "_id"}, indexName, "")
+}
+
+// UUIDMorphs add the proper columns for a polymorphic table using UUIDs.
+func (b *Blueprint) UUIDMorphs(column string, indexName string) {
+	b.String(column+"_type", 0)
+	b.UUID(column + "_id")
+	b.Index([]string{column + "_type", column + "_id"}, indexName, "")
+}
+
+// NullableUUIDMorphs add nullable uuid columns for a polymorphic table.
+func (b *Blueprint) NullableUUIDMorphs(column string, indexName string) {
+	b.String(column+"_type", 0).Nullable()
+	b.UUID(column + "_id").Nullable()
+	b.Index([]string{column + "_type", column + "_id"}, indexName, "")
+}
+
+// RememberToken adds the `remember_token` column to the table.
+func (b *Blueprint) RememberToken() *ColumnDefinition {
+	return b.String("remember_token", 100).Nullable()
+}
+
+// foreignID
+
+// Index TODO
+func (b *Blueprint) Index(columns []string, name string, algorithm string) {
+	// TODO
 }
 
 func (b *Blueprint) toSQL(conn *Connection, grammar Grammar) []string {
