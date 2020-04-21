@@ -8,9 +8,12 @@ import (
 )
 
 func TestImplode(t *testing.T) {
-	enums := []string{"FOO", "BAR"}
+	columns := []string{"FOO", "BAR"}
+	table := "table"
+	prefix := "test_"
+	typ := "index"
 
-	imploded := strings.Join(enums, ",")
+	imploded := strings.ToLower(prefix + table + "_" + strings.Join(columns, "_") + "_" + typ)
 	t.Log(imploded)
 }
 

@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 type (
@@ -11,10 +12,21 @@ type (
 		table     string              // the table the blueprint describes.
 		prefix    string              // the prefix of the table
 		columns   []*ColumnDefinition // columns that should be added to the table
-		commands  []string            //
+		commands  []*Command          //
 		temporary bool                // Whether to make the table temporary.
 		charset   string              // The default character set that should be used for the table.
 		collation string              // The collation that should be used for the table.
+	}
+
+	Command struct {
+		Typ string
+		CommandOptions
+	}
+
+	CommandOptions struct {
+		Index     string
+		Columns   []string
+		Algorithm string
 	}
 )
 
@@ -42,8 +54,43 @@ func (b *Blueprint) GetCollation() string {
 	return b.collation
 }
 
-func (b *Blueprint) addCommand(name string) {
-	b.commands = append(b.commands, name)
+func (b *Blueprint) addCommand(name string, options *CommandOptions) *Blueprint {
+	command := &Command{
+		Typ: name,
+	}
+	if options != nil {
+		command.Index = options.Index
+		command.Columns = options.Columns
+		command.Algorithm = options.Algorithm
+	}
+
+	b.commands = append(b.commands, command)
+
+	return b
+}
+
+// Add a new index command to the blueprint
+func (b *Blueprint) indexCommand(typ string, columns []string, index string, algorithm string) *Blueprint {
+	// if no name was specified for this index, we will create one using a bsaic
+	// convention of the table name, followed by the columns, followd by an
+	// index type, such as primary or index, which makes the index unique.
+	if index == "" {
+		index = b.createIndexName(typ, columns)
+	}
+
+	return b.addCommand(typ, &CommandOptions{
+		Index:     index,
+		Columns:   columns,
+		Algorithm: algorithm,
+	})
+}
+
+func (b *Blueprint) createIndexName(typ string, columns []string) string {
+	index := strings.ToLower(b.prefix + b.table + "_" + strings.Join(columns, "_") + "_" + typ)
+	index = strings.Replace(index, "-", "_", -1)
+	index = strings.Replace(index, ".", "_", -1)
+
+	return index
 }
 
 func (b *Blueprint) addColumn(typ, name string, options *ColumnOptions) *ColumnDefinition {
@@ -85,7 +132,7 @@ func (b *Blueprint) addColumn(typ, name string, options *ColumnOptions) *ColumnD
 
 // Create indicate that the table needs to be created.
 func (b *Blueprint) Create() {
-	b.addCommand("create")
+	b.addCommand("create", nil)
 }
 
 // Temporary indicate that the table needs to be temporary.
@@ -95,7 +142,7 @@ func (b *Blueprint) Temporary() {
 
 // Drop indicate that the table should be dropped.
 func (b *Blueprint) Drop() {
-	b.addCommand("drop")
+	b.addCommand("drop", nil)
 }
 
 // Char create a new char column on the table
@@ -455,18 +502,49 @@ func (b *Blueprint) RememberToken() *ColumnDefinition {
 	return b.String("remember_token", 100).Nullable()
 }
 
+// ID Create a new auto-incrementing big integer (8-byte) column on the table.
+func (b *Blueprint) ID(column string) *ColumnDefinition {
+	if column == "" {
+		column = "id"
+	}
+	return b.BigIncrements(column)
+}
+
+// BigIncrements Create a new auto-incrementing big integer (8-byte) column on the table.
+func (b *Blueprint) BigIncrements(column string) *ColumnDefinition {
+	return b.UnsignedBigInteger(column, true)
+}
+
+// ForeignID Create a new unsigned big integer (8-byte) column on the table.
+func (b *Blueprint) ForeignID(column string) *ColumnDefinition {
+	return b.addColumn("bigInteger", column, &ColumnOptions{
+		AutoIncrement: true,
+		Unsigned:      true,
+	})
+}
+
 // foreignID
 
-// Index TODO
-func (b *Blueprint) Index(columns []string, name string, algorithm string) {
-	// TODO
+// Index Specify an index for the table.
+func (b *Blueprint) Index(columns []string, name string, algorithm string) *Blueprint {
+	return b.indexCommand("index", columns, name, algorithm)
+}
+
+// SpatialIndex Specify a spatial index for the table.
+func (b *Blueprint) SpatialIndex(columns []string, name string) *Blueprint {
+	return b.indexCommand("spatialIndex", columns, name, "")
+}
+
+// Foreign Specify a foreign key for the table.
+func (b *Blueprint) Foreign(columns []string, name string) *Blueprint {
+	return b.indexCommand("foreign", columns, name, "")
 }
 
 func (b *Blueprint) toSQL(conn *Connection, grammar Grammar) []string {
 	var statements []string
 
 	for _, cmd := range b.commands {
-		switch cmd {
+		switch cmd.Typ {
 		case "create":
 			statements = append(statements, grammar.CompileCreate(b, conn))
 		}
