@@ -73,6 +73,32 @@ See https://github.com/golang/go/wiki/SQLDrivers for a list of 3rd Party drivers
 | table.UUID("id") | UUID equivalent column. |
 | table.Year("birth_year") | YEAR equivalent column. |
 
+## Column Modifiers
+
+In addition to the column types listed above, there are several column "modifiers" you may use while adding a column to a database table. For example to make the column "nullable" you may use the `Nullable` method.
+
+```go
+builder.Create("users", func(table *Blueprint) {
+		table.String("email", 255).Nullable()
+    })
+```
+
+The following list contains all available column modifiers. This list does not include the index modifiers.
+
+| Modifier | Description |
+|---|---|
+| `.After("column")` | Place the column "after" another column (MySQL) |
+| `.AutoIncrement()` | Set INTEGER columns as auto-increment (primary key) |
+| `.Charset("utf8")` | Specify a character set for the column (MySQL) |
+| `.Collaction("utf8_unicode_ci")` | Specify a collation for the column (MySQL/PostgreSQL/SQL Server) |
+| `.Comment("my comment")` | Add a comment to a column (MySQL/PostgreSQL) |
+| `.Default("1")` | Specify a "default" value for the column |
+| `.First()` | Place the column "first" in the table (MySQL) |
+| `.Nullable()` | Allows NULL values to be inserted into the column |
+| `.StoredAs("value")` | Create a stored generated column (MySQL) |
+| `.Unsigned()` | Set INTEGER columns as UNSIGNED (MySQL) |
+| `.VirtualAs("value")` | Create a stored generated column (MySQL) |
+
 ## Creating Indexes
 
 The Enlight schema builder supports several types of indexes. The following example creates a new `email` column and specified that its value should be unique. To create the index, we can chain the `unique` method onto the column definition:

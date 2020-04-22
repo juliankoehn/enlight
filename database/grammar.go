@@ -2,6 +2,7 @@ package database
 
 import (
 	"bytes"
+	"strconv"
 	"strings"
 )
 
@@ -59,7 +60,7 @@ func (g *grammar) getColumns(bp *Blueprint) []string {
 		buf.WriteByte(' ')
 		buf.WriteString(value.Typ)
 		buf.WriteByte('(')
-		buf.WriteString(value.Length)
+		buf.WriteString(strconv.Itoa(value.Length))
 		buf.WriteByte(')')
 
 		columns[key] = buf.String()

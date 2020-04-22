@@ -2,7 +2,6 @@ package database
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -27,6 +26,7 @@ type (
 		Index     string
 		Columns   []string
 		Algorithm string
+		To        string
 	}
 )
 
@@ -101,13 +101,13 @@ func (b *Blueprint) addColumn(typ, name string, options *ColumnOptions) *ColumnD
 
 	if options != nil {
 		if options.Length > 0 {
-			definition.Length = strconv.Itoa(options.Length)
+			definition.Length = options.Length
 		}
-		if options.AutoIncrement {
-			definition.AutoIncrement = true
+		if options.autoIncrement {
+			definition.autoIncrement = true
 		}
-		if options.Unsigned {
-			definition.Unsigned = true
+		if options.unsigned {
+			definition.unsigned = true
 		}
 		if options.Total > 0 {
 			definition.Total = options.Total
@@ -184,40 +184,40 @@ func (b *Blueprint) LongText(column string) *ColumnDefinition {
 // Integer create a new integer column on the table
 func (b *Blueprint) Integer(column string, autoIncrement, unsigned bool) *ColumnDefinition {
 	return b.addColumn("integer", column, &ColumnOptions{
-		AutoIncrement: autoIncrement,
-		Unsigned:      unsigned,
+		autoIncrement: autoIncrement,
+		unsigned:      unsigned,
 	})
 }
 
 // TinyInteger create a new tiny integer (1-byte) column on the table
 func (b *Blueprint) TinyInteger(column string, autoIncrement, unsigned bool) *ColumnDefinition {
 	return b.addColumn("tinyInteger", column, &ColumnOptions{
-		AutoIncrement: autoIncrement,
-		Unsigned:      unsigned,
+		autoIncrement: autoIncrement,
+		unsigned:      unsigned,
 	})
 }
 
 // SmallInteger create a new small integer (2-byte) column on the table
 func (b *Blueprint) SmallInteger(column string, autoIncrement, unsigned bool) *ColumnDefinition {
 	return b.addColumn("smallInteger", column, &ColumnOptions{
-		AutoIncrement: autoIncrement,
-		Unsigned:      unsigned,
+		autoIncrement: autoIncrement,
+		unsigned:      unsigned,
 	})
 }
 
 // MediumInteger create a new mediumInteger (3-byte) column on the table
 func (b *Blueprint) MediumInteger(column string, autoIncrement, unsigned bool) *ColumnDefinition {
 	return b.addColumn("mediumInteger", column, &ColumnOptions{
-		AutoIncrement: autoIncrement,
-		Unsigned:      unsigned,
+		autoIncrement: autoIncrement,
+		unsigned:      unsigned,
 	})
 }
 
 // BigInteger create a new bigInteger (8-byte) column on the table
 func (b *Blueprint) BigInteger(column string, autoIncrement, unsigned bool) *ColumnDefinition {
 	return b.addColumn("bigInteger", column, &ColumnOptions{
-		AutoIncrement: autoIncrement,
-		Unsigned:      unsigned,
+		autoIncrement: autoIncrement,
+		unsigned:      unsigned,
 	})
 }
 
@@ -258,7 +258,7 @@ func (b *Blueprint) Float(column string, total, places int, unsigned bool) *Colu
 	return b.addColumn("float", column, &ColumnOptions{
 		Total:    total,
 		Places:   places,
-		Unsigned: unsigned,
+		unsigned: unsigned,
 	})
 }
 
@@ -267,7 +267,7 @@ func (b *Blueprint) Double(column string, total, places int, unsigned bool) *Col
 	return b.addColumn("double", column, &ColumnOptions{
 		Total:    total,
 		Places:   places,
-		Unsigned: unsigned,
+		unsigned: unsigned,
 	})
 }
 
@@ -282,7 +282,7 @@ func (b *Blueprint) Decimal(column string, total, places int, unsigned bool) *Co
 	return b.addColumn("decimal", column, &ColumnOptions{
 		Total:    total,
 		Places:   places,
-		Unsigned: unsigned,
+		unsigned: unsigned,
 	})
 }
 
@@ -518,8 +518,8 @@ func (b *Blueprint) BigIncrements(column string) *ColumnDefinition {
 // ForeignID Create a new unsigned big integer (8-byte) column on the table.
 func (b *Blueprint) ForeignID(column string) *ColumnDefinition {
 	return b.addColumn("bigInteger", column, &ColumnOptions{
-		AutoIncrement: true,
-		Unsigned:      true,
+		autoIncrement: true,
+		unsigned:      true,
 	})
 }
 
@@ -533,6 +533,23 @@ func (b *Blueprint) Index(columns []string, name string, algorithm string) *Blue
 // SpatialIndex Specify a spatial index for the table.
 func (b *Blueprint) SpatialIndex(columns []string, name string) *Blueprint {
 	return b.indexCommand("spatialIndex", columns, name, "")
+}
+
+// Rename the table to a given name.
+func (b *Blueprint) Rename(to string) *Blueprint {
+	return b.addCommand("rename", &CommandOptions{
+		To: to,
+	})
+}
+
+// Primary Specify the primary key(s) for the table.
+func (b *Blueprint) Primary(columns []string, name string, algorithm string) *Blueprint {
+	return b.indexCommand("primary", columns, name, algorithm)
+}
+
+// Unique Specify a unique index for the table.
+func (b *Blueprint) Unique(columns []string, name string, algorithm string) *Blueprint {
+	return b.indexCommand("unique", columns, name, algorithm)
 }
 
 // Foreign Specify a foreign key for the table.

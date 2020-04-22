@@ -71,12 +71,14 @@ func TestBuilder(t *testing.T) {
 
 	// lets test the table creation process
 
-	stmt := builder.Create("awesome_table", func(table *Blueprint) {
+	stmt := builder.Create("awesome_table_o", func(table *Blueprint) {
 		table.UnsignedBigInteger("id", true)
-		table.String("label", 255)
+		table.String("label", 255).Nullable()
 		table.Text("long_description")
 		table.MediumText("short_description")
 		table.TinyInteger("is_active", false, false)
+		table.UnsignedBigInteger("age", false)
+		table.Primary([]string{"id"}, "", "")
 	})
 
 	t.Log(stmt)

@@ -3,6 +3,8 @@ package database
 import (
 	"bytes"
 	"strconv"
+
+	"github.com/juliankoehn/enlight/support/str"
 )
 
 type (
@@ -18,7 +20,7 @@ var (
 		"Unsigned", "Charset", "Collate", "VirtualAs", "StoredAs",
 		"Nullable", "Srid", "Default", "Increment", "Comment", "After", "First",
 	}
-	mysqlDefaultSerials = []string{
+	mysqlSerials = []string{
 		"bigInteger", "integer", "mediumInteger", "smallInteger", "tinyInteger",
 	}
 )
@@ -30,7 +32,7 @@ func NewMySQLGrammar() *MySQLGrammar {
 	return &MySQLGrammar{
 		grammar:   grammar,
 		modifiers: mysqlDefaultModifiers,
-		serials:   mysqlDefaultSerials,
+		serials:   mysqlSerials,
 	}
 }
 
@@ -101,6 +103,7 @@ func (mysql *MySQLGrammar) compileCreateTable(bp *Blueprint) string {
 
 	buf.WriteString(command)
 	buf.WriteString(" table ")
+	buf.WriteString(bp.prefix)
 	buf.WriteString(bp.table)
 	buf.WriteByte('(')
 
@@ -206,16 +209,111 @@ func (mysql *MySQLGrammar) getColumns(bp *Blueprint) []string {
 			buf.WriteString(mysql.typeMultiPolygon(column))
 		}
 
+		buf.WriteString(mysql.modifyUnsigned(column))
+		buf.WriteString(mysql.modifyCharset(column))
+		buf.WriteString(mysql.modifyCollate(column))
+		buf.WriteString(mysql.modifyVirtualAs(column))
+		buf.WriteString(mysql.modifyStoredAs(column))
+		buf.WriteString(mysql.modifyNullable(column))
+		buf.WriteString(mysql.modifySrid(column))
+		buf.WriteString(mysql.modifyDefault(column))
+		buf.WriteString(mysql.modifyIncrement(column))
+		buf.WriteString(mysql.modifyComment(column))
+		buf.WriteString(mysql.modifyAfter(column))
+		buf.WriteString(mysql.modifyFirst(column))
+
 		columns[key] = buf.String()
 	}
 
 	return columns
 }
 
+func (mysql *MySQLGrammar) modifyComment(column *ColumnDefinition) string {
+	if column.comment != "" {
+		return " comment '" + str.Addslashes(column.comment) + "'"
+	}
+	return ""
+}
+
+// Get the SQL for a SRID column modifier.
+func (mysql *MySQLGrammar) modifySrid(column *ColumnDefinition) string {
+	if column.srid > 0 {
+		return " srid " + strconv.Itoa(column.srid)
+	}
+	return ""
+}
+
+func (mysql *MySQLGrammar) modifyDefault(column *ColumnDefinition) string {
+	if column.def != "" {
+		return " default " + column.def
+	}
+	return ""
+}
+
+func (mysql *MySQLGrammar) modifyNullable(column *ColumnDefinition) string {
+	if column.virtualAs == "" && column.storedAs == "" && column.nullable {
+		return " null"
+	}
+	return " not null"
+}
+
+func (mysql *MySQLGrammar) modifyCharset(column *ColumnDefinition) string {
+	if column.charset != "" {
+		return " character set " + column.charset
+	}
+	return ""
+}
+
+func (mysql *MySQLGrammar) modifyCollate(column *ColumnDefinition) string {
+	if column.collation != "" {
+		return " collate " + column.collation
+	}
+	return ""
+}
+
+func (mysql *MySQLGrammar) modifyAfter(column *ColumnDefinition) string {
+	if column.after != "" {
+		return " after " + column.after
+	}
+	return ""
+}
+
+func (mysql *MySQLGrammar) modifyFirst(column *ColumnDefinition) string {
+	if column.first {
+		return " first"
+	}
+	return ""
+}
+
+// Get the SQL for an auto-increment column modifier.
+func (mysql *MySQLGrammar) modifyIncrement(column *ColumnDefinition) string {
+	if str.Contains(mysqlSerials, column.Typ) && column.autoIncrement {
+		return " auto_increment primary key"
+	}
+	return ""
+}
+
+// Get the SQL for a generated virtual column modifier.
+func (mysql *MySQLGrammar) modifyUnsigned(column *ColumnDefinition) string {
+	if column.unsigned {
+		return " unsigned"
+	}
+	return ""
+}
+
 // Get the SQL for a generated virtual column modifier.
 func (mysql *MySQLGrammar) modifyVirtualAs(column *ColumnDefinition) string {
-	if column.VirtualAs != "" {
-		return " as (" + column.VirtualAs + ")"
+	if column.virtualAs != "" {
+		return " as (" + column.virtualAs + ")"
+	}
+
+	return ""
+}
+
+// Get the SQL for a generated virtual column modifier.
+func (mysql *MySQLGrammar) modifyStoredAs(column *ColumnDefinition) string {
+	if column.storedAs != "" {
+		return " as (" + column.storedAs + ") stored"
 	}
 
 	return ""
@@ -405,12 +503,12 @@ func (mysql *MySQLGrammar) typeMediumInteger(column *ColumnDefinition) string {
 
 // Create the column definition for a char type.
 func (mysql *MySQLGrammar) typeChar(column *ColumnDefinition) string {
-	return "char(" + column.Length + ")"
+	return "char(" + strconv.Itoa(column.Length) + ")"
 }
 
 // Create the column definition for a string type.
 func (mysql *MySQLGrammar) typeString(column *ColumnDefinition) string {
-	return "varchar(" + column.Length + ")"
+	return "varchar(" + strconv.Itoa(column.Length) + ")"
 }
 
 // Create the column definition for a text type.
